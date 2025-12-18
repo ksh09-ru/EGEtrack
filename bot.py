@@ -2,12 +2,22 @@ import openai
 from aiogram import Bot, Dispatcher, executor, types
 from config import BOT_TOKEN, OPENAI_API_KEY
 from database import add_user, update_field, get_user
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 openai.api_key = OPENAI_API_KEY
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 user_state = {}
+
+main_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton("📅 Расписание"), KeyboardButton("📘 Предметы")],
+        [KeyboardButton("❗ Слабые задания")],
+        [KeyboardButton("🧠 Получить план")]
+    ],
+    resize_keyboard=True
+)
 
 def generate_plan(schedule, subjects, weak):
     prompt = f"""
@@ -46,71 +56,60 @@ def generate_plan(schedule, subjects, weak):
 
 @dp.message_handler(commands=["start"])
 async def start(message: types.Message):
-    add_user(message.from_user.id)
     await message.answer(
-        "👋 Привет! Я ExamsTrack.\n\n"
-        "Я помогу составить план подготовки к ЕГЭ.\n\n"
-        "Команды:\n"
-        "/schedule — ввести расписание\n"
-        "/subjects — предметы ЕГЭ\n"
-        "/weak — слабые задания\n"
-        "/plan — получить план"
+        "👋 Привет! Я ExamsTrack — бот для подготовки к ЕГЭ.\n\n"
+        "Выбери действие с помощью кнопок 👇",
+        reply_markup=main_keyboard
     )
 
 
-@dp.message_handler(commands=["schedule"])
-async def schedule(message: types.Message):
+@dp.message_handler(text="📅 Расписание")
+async def schedule_btn(message: types.Message):
     user_state[message.from_user.id] = "schedule"
     await message.answer(
-    "📅 Отправь своё расписание одним сообщением.\n\n"
-    "Пример:\n"
-    "Пн–Пт: школа 8:30–15:00\n"
-    "Пн: математика 16:00–17:30\n"
-    "Ср: русский 16:00–17:30\n"
-    "Сб: отдых, друзья"
-)
+        "📅 Отправь своё расписание.\n\n"
+        "Пример:\n"
+        "Пн–Пт: школа 8:30–15:00\n"
+        "Пн: математика 16:00–17:30"
+    )
                          
     
 
 
-@dp.message_handler(commands=["subjects"])
-async def subjects(message: types.Message):
+@dp.message_handler(text="📘 Предметы")
+async def subjects_btn(message: types.Message):
     user_state[message.from_user.id] = "subjects"
     await message.answer(
-    "📘 Отправь предметы, которые ты сдаёшь.\n\n"
-    "Пример:\n"
-    "Математика\nРусский\nИнформатика"
-)
+        "📘 Напиши предметы ЕГЭ.\n\n"
+        "Пример:\n"
+        "Математика\nРусский\nИнформатика"
+    )
     
 
 
-@dp.message_handler(commands=["weak"])
-async def weak(message: types.Message):
+@dp.message_handler(text="❗ Слабые задания")
+async def weak_btn(message: types.Message):
     user_state[message.from_user.id] = "weak"
     await message.answer(
-    "❗ Напиши задания, которые даются сложнее.\n\n"
-    "Пример:\n"
-    "Математика — задание 13\n"
-    "Русский — задание 8\n"
-    "Информатика — задачи на циклы"
-)
+        "❗ Напиши слабые задания.\n\n"
+        "Пример:\n"
+        "Математика — задание 13"
+    )
     
 
 
-@dp.message_handler(commands=["plan"])
-async def plan(message: types.Message):
+@dp.message_handler(text="🧠 Получить план")
+async def plan_btn(message: types.Message):
     user = get_user(message.from_user.id)
-
-    if not user or not all(user):
-        await message.answer("⚠️ Сначала введи расписание, предметы и слабые задания.")
-        return
-
-    schedule, subjects, weak = user
-    await message.answer("⏳ Анализирую расписание и составляю план...")
-
-    plan_text = generate_plan(schedule, subjects, weak)
-    await message.answer(plan_text)
-
+    await message.answer("⏳ Анализирую данные и составляю план...")
+    
+    data = get_user_data(message.from_user.id)
+    plan = generate_plan(
+        data["schedule"],
+        data["subjects"],
+        data["weak_topics"]
+    )
+    await message.answer(plan)
 
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def save_data(message: types.Message):
