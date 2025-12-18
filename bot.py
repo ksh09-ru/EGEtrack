@@ -7,7 +7,7 @@ openai.api_key = OPENAI_API_KEY
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
-
+user_state = {}
 
 def generate_plan(schedule, subjects, weak):
     prompt = f"""
@@ -60,30 +60,41 @@ async def start(message: types.Message):
 
 @dp.message_handler(commands=["schedule"])
 async def schedule(message: types.Message):
+    user_state[message.from_user.id] = "schedule"
     await message.answer(
-        "📅 Отправь своё расписание (одним сообщением).\n"
-        "Пример:\n"
-        "Понедельник 08:30-15:00 школа\n"
-        "Понедельник 18:00-19:00 тренировка"
-    )
+    "📅 Отправь своё расписание одним сообщением.\n\n"
+    "Пример:\n"
+    "Пн–Пт: школа 8:30–15:00\n"
+    "Пн: математика 16:00–17:30\n"
+    "Ср: русский 16:00–17:30\n"
+    "Сб: отдых, друзья"
+)
+                         
+    
 
 
 @dp.message_handler(commands=["subjects"])
 async def subjects(message: types.Message):
+    user_state[message.from_user.id] = "subjects"
     await message.answer(
-        "📘 Отправь предметы ЕГЭ.\n"
-        "Пример:\n"
-        "Математика профиль\nРусский\nИнформатика"
-    )
+    "📘 Отправь предметы, которые ты сдаёшь.\n\n"
+    "Пример:\n"
+    "Математика\nРусский\nИнформатика"
+)
+    
 
 
 @dp.message_handler(commands=["weak"])
 async def weak(message: types.Message):
+    user_state[message.from_user.id] = "weak"
     await message.answer(
-        "❗️ Отправь слабые задания.\n"
-        "Пример:\n"
-        "Математика: 13, 15\nРусский: 8, сочинение"
-    )
+    "❗ Напиши задания, которые даются сложнее.\n\n"
+    "Пример:\n"
+    "Математика — задание 13\n"
+    "Русский — задание 8\n"
+    "Информатика — задачи на циклы"
+)
+    
 
 
 @dp.message_handler(commands=["plan"])
@@ -101,20 +112,29 @@ async def plan(message: types.Message):
     await message.answer(plan_text)
 
 
-@dp.message_handler()
+@dp.message_handler(content_types=types.ContentType.TEXT)
 async def save_data(message: types.Message):
-    text = message.text.lower()
+    uid = message.from_user.id
 
-    if "школа" in text or ":" in text:
-        update_field(message.from_user.id, "schedule", message.text)
+    if uid not in user_state:
+        await message.answer("ℹ️ Используй команды: /schedule, /subjects, /weak или /plan")
+        return
+
+    state = user_state[uid]
+
+    if state == "schedule":
+        update_field(uid, "schedule", message.text)
         await message.answer("✅ Расписание сохранено")
-    elif "математика" in text or "русский" in text:
-        update_field(message.from_user.id, "subjects", message.text)
+
+    elif state == "subjects":
+        update_field(uid, "subjects", message.text)
         await message.answer("✅ Предметы сохранены")
-    else:
-        update_field(message.from_user.id, "weak_topics", message.text)
+
+    elif state == "weak":
+        update_field(uid, "weak_topics", message.text)
         await message.answer("✅ Слабые задания сохранены")
 
+    user_state.pop(uid)
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
